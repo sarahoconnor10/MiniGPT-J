@@ -110,5 +110,16 @@ public class Matrix {
         return result;
     }
 
+    public Matrix transpose() {
+        Matrix result = new Matrix(cols, rows);
+        for (int i = 0; i < rows; i++) {
+            for (int j = 0; j < cols; j++) {
+                result.set(j, i, this.data[i][j]);
+            }
+        }
+        return result;
+    }
+
+
 
 }
