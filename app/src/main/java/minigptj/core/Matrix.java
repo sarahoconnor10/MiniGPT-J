@@ -1,5 +1,7 @@
 package minigptj.core;
 
+import java.util.function.Function;
+
 public class Matrix {
     private final int rows;
     private final int cols;
@@ -97,5 +99,16 @@ public class Matrix {
 
         return result;
     }
+
+    public Matrix apply(Function<Double, Double> func) {
+        Matrix result = new Matrix(rows, cols);
+        for (int i = 0; i < rows; i++) {
+            for (int j = 0; j < cols; j++) {
+                result.data[i][j] = func.apply(this.data[i][j]);
+            }
+        }
+        return result;
+    }
+
 
 }
