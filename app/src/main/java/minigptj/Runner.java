@@ -5,17 +5,16 @@ import minigptj.core.Matrix;
 
 public class Runner {
     public static void main(String[] args) {
-        Matrix m = new Matrix(new double[][] {
-            {1, 2, 3},
-            {4, 5, 6}
+        Matrix logits = new Matrix(new double[][] {
+            {2.0, 1.0, 0.1},
+            {1.0, 3.0, 0.5}
         });
 
-        Matrix t = m.transpose();
+        System.out.println("Logits:");
+        System.out.println(logits);
 
-        System.out.println("Original:");
-        System.out.println(m);
-
-        System.out.println("Transposed:");
-        System.out.println(t);
+        Matrix probs = logits.softmaxRows();
+        System.out.println("Softmax probabilities:");
+        System.out.println(probs);
     }
 }

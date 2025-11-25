@@ -16,7 +16,7 @@ public class Matrix {
     public Matrix(double[][] data) {
         this.rows = data.length;
         this.cols = data[0].length;
-        this.data = data;
+        this.data = new double[rows][cols];
 
         for (int i = 0; i < rows; i++) {
             if (data[i].length != cols) {
@@ -25,6 +25,7 @@ public class Matrix {
             System.arraycopy(data[i], 0, this.data[i], 0, cols);
         }
     }
+
 
     public int getRows() {
         return rows;
@@ -117,6 +118,32 @@ public class Matrix {
                 result.set(j, i, this.data[i][j]);
             }
         }
+        return result;
+    }
+
+    public Matrix softmaxRows() {
+        Matrix result = new Matrix(rows, cols);
+
+        for (int i = 0; i < rows; i++) {
+            double max = Double.NEGATIVE_INFINITY;
+            for (int j = 0; j < cols; j++) {
+                if (data[i][j] > max) {
+                    max = data[i][j];
+                }
+            }
+
+            double sumExp = 0.0;
+            for (int j = 0; j < cols; j++) {
+                double exp = Math.exp(data[i][j] - max);
+                result.data[i][j] = exp;
+                sumExp += exp;
+            }
+
+            for (int j = 0; j < cols; j++) {
+                result.data[i][j] /= sumExp;
+            }
+        }
+
         return result;
     }
 
