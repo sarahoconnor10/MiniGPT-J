@@ -53,4 +53,18 @@ public class Matrix {
         }
         return sb.toString();
     }
+
+    public Matrix add(Matrix other) {
+        if (this.rows != other.rows || this.cols != other.cols) {
+            throw new IllegalArgumentException("Matrix dimensions must match for addition");
+        }
+
+        Matrix result = new Matrix(this.rows, this.cols);
+        for (int i = 0; i < this.rows; i++) {
+            for (int j = 0; j < this.cols; j++) {
+                result.set(i, j, this.get(i, j) + other.get(i, j));
+            }
+        }
+        return result;
+    }
 }

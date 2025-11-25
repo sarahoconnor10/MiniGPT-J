@@ -15,5 +15,20 @@ public class Runner {
         m.set(0, 1, 5.0);
         System.out.println("After change:");
         System.out.println(m);
+        Matrix a = new Matrix(new double[][]{
+            {1, 2},
+            {3, 4}
+        });
+
+        Matrix b = new Matrix(new double[][]{
+                {10, 20},
+                {30, 40}
+        });
+
+        Matrix c = a.add(b);
+        System.out.println("A + B =");
+        System.out.println(c);
+
+        
     }
 }
