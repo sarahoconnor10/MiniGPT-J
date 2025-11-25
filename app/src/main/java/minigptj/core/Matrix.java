@@ -69,13 +69,33 @@ public class Matrix {
     }
 
     public Matrix multiply(double scalar) {
-    Matrix result = new Matrix(rows, cols);
-    for (int i = 0; i < rows; i++) {
-        for (int j = 0; j < cols; j++) {
-            result.data[i][j] = this.data[i][j] * scalar;
+        Matrix result = new Matrix(rows, cols);
+        for (int i = 0; i < rows; i++) {
+            for (int j = 0; j < cols; j++) {
+                result.data[i][j] = this.data[i][j] * scalar;
+            }
         }
+        return result;
     }
-    return result;
-}
+
+    public Matrix dot(Matrix other) {
+        if (this.cols != other.rows) {
+            throw new IllegalArgumentException("Incompatible matrix dimensions for dot product");
+        }
+
+        Matrix result = new Matrix(this.rows, other.cols);
+
+        for (int i = 0; i < this.rows; i++) {
+            for (int j = 0; j < other.cols; j++) {
+                double sum = 0;
+                for (int k = 0; k < this.cols; k++) {
+                    sum += this.data[i][k] * other.data[k][j];
+                }
+                result.data[i][j] = sum;
+            }
+        }
+
+        return result;
+    }
 
 }
