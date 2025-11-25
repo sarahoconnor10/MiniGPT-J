@@ -67,4 +67,15 @@ public class Matrix {
         }
         return result;
     }
+
+    public Matrix multiply(double scalar) {
+    Matrix result = new Matrix(rows, cols);
+    for (int i = 0; i < rows; i++) {
+        for (int j = 0; j < cols; j++) {
+            result.data[i][j] = this.data[i][j] * scalar;
+        }
+    }
+    return result;
+}
+
 }

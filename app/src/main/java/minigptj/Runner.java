@@ -29,6 +29,14 @@ public class Runner {
         System.out.println("A + B =");
         System.out.println(c);
 
+        Matrix m1 = new Matrix(new double[][] {
+            {1, 2},
+            {3, 4}
+        });
+        Matrix scaled = m1.multiply(2.0);
+        System.out.println("Scaled:");
+        System.out.println(scaled);
+
         
     }
 }
