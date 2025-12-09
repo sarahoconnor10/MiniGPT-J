@@ -80,7 +80,7 @@ public class MatrixTest {
 
     }
 
-     @Test
+    @Test
     void testSoftmaxRows() {
         Matrix logits = new Matrix(new double[][]{
             {2.0, 1.0, 0.1}
@@ -97,4 +97,5 @@ public class MatrixTest {
         assertTrue(p0 > p1);
         assertTrue(p0 > p2);
     }
+
 }
