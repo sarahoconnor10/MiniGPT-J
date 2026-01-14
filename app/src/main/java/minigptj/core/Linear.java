@@ -8,7 +8,10 @@ public class Linear {
     private final int outputSize;
     private final Matrix weights;
     private final Matrix bias;
-
+    private Matrix lastInput;
+    private Matrix gradWeights;
+    private Matrix gradBias;
+    
     public Linear(int inputSize, int outputSize) {
         this.inputSize = inputSize;
         this.outputSize = outputSize;
@@ -29,6 +32,7 @@ public class Linear {
     }
 
     public Matrix forward(Matrix input) {
+        this.lastInput = input;
         // input shape: (batchSize x inputSize)
         Matrix out = input.dot(weights);  // (batchSize x outputSize)
 
@@ -46,6 +50,31 @@ public class Linear {
         return out;
     }
 
+    public Matrix backward(Matrix dOut) {
+        if (lastInput == null) {
+            throw new IllegalStateException("Must call forward() before backward().");
+        }
+        // dOut: (batchSize x outputSize)
+
+        // 1) dX = dOut * W^T
+        Matrix dX = dOut.dot(weights.transpose()); // (batchSize x inputSize)
+
+        // 2) dW = X^T * dOut
+        this.gradWeights = lastInput.transpose().dot(dOut); // (inputSize x outputSize)
+
+        // 3) db = sum over batch rows
+        this.gradBias = new Matrix(1, outputSize);
+        for (int j = 0; j < outputSize; j++) {
+            double sum = 0.0;
+            for (int i = 0; i < dOut.getRows(); i++) {
+                sum += dOut.get(i, j);
+            }
+            gradBias.set(0, j, sum);
+        }
+
+        return dX;
+    }
+
     public Matrix getWeights() {
         return weights;
     }
@@ -54,7 +83,12 @@ public class Linear {
         return bias;
     }
 
+    public Matrix getGradWeights() {
+        return gradWeights;
+     }
 
-
-
+    public Matrix getGradBias() {
+        return gradBias;
+    }
+    
 }
