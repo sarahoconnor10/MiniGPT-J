@@ -30,8 +30,20 @@ public class Linear {
 
     public Matrix forward(Matrix input) {
         // input shape: (batchSize x inputSize)
-        Matrix out = input.dot(weights);   // (batchSize x outputSize)
-        return out.add(bias);
+        Matrix out = input.dot(weights);  // (batchSize x outputSize)
+
+        int rows = out.getRows();
+        int cols = out.getCols();
+
+        // Manually add the bias row to each row of the output
+        for (int i = 0; i < rows; i++) {
+            for (int j = 0; j < cols; j++) {
+                double value = out.get(i, j) + bias.get(0, j);
+                out.set(i, j, value);
+            }
+        }
+
+        return out;
     }
 
     public Matrix getWeights() {
@@ -42,7 +54,7 @@ public class Linear {
         return bias;
     }
 
-    
+
 
 
 }
