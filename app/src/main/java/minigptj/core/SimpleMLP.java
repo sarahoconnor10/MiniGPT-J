@@ -73,6 +73,4 @@ public class SimpleMLP {
     public int getOutputSize() {
         return outputSize;
     }
-
-
 }
