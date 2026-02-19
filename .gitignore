@@ -5,29 +5,27 @@
 *.log
 
 # Compiled output
-/bin/
-/out/
-/target/
+bin/
+out/
+**/bin/
+**/out/
 
 # =========================
 # Gradle
 # =========================
 .gradle/
 build/
+**/build/
+.gradle-user/
 !gradle/wrapper/gradle-wrapper.jar
 
 # =========================
 # IDE files
 # =========================
 
-# VS Code
 .vscode/
-
-# IntelliJ
 .idea/
 *.iml
-
-# Eclipse
 .project
 .classpath
 .settings/
