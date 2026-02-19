@@ -26,12 +26,12 @@ public class MLPLanguageModel {
         return layer2.forward(h);
     }
 
-    /** Backprop from dLogits through layer2 -> relu -> layer1. */
-    public void backward(Matrix dLogits) {
-        Matrix dH = layer2.backward(dLogits);
-        dH = relu.backward(dH);
-        layer1.backward(dH);
-    }
+    public Matrix backward(Matrix dLogits) {
+    Matrix dH = layer2.backward(dLogits);
+    dH = relu.backward(dH);
+    Matrix dX = layer1.backward(dH);
+    return dX;
+}
 
     public Linear getLayer1() { return layer1; }
     public Linear getLayer2() { return layer2; }

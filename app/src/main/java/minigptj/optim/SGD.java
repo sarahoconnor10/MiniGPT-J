@@ -2,12 +2,13 @@ package minigptj.optim;
 
 import minigptj.core.Linear;
 import minigptj.core.Matrix;
+import minigptj.model.Embedding;
 
 /**
  * Stochastic Gradient Descent (SGD) optimizer.
  *
  * This class is responsible for updating the parameters of a trainable layer
- * (currently Linear) using gradients computed during backpropagation.
+ * using gradients computed during backpropagation.
  *
  * SGD applies the update rule:
  *
@@ -61,6 +62,27 @@ public class SGD {
         for (int j = 0; j < b.getCols(); j++) {
             double updated = b.get(0, j) - learningRate * dB.get(0, j);
             b.set(0, j, updated);
+        }
+    }
+
+
+    /**
+     * Apply one optimisation step to an Embedding layer.
+     *
+     * weights = weights - lr * gradWeights
+     */
+    public void step(Embedding emb) {
+        Matrix w = emb.getWeights();
+        Matrix dW = emb.getGradWeights();
+
+        if (dW == null) {
+            throw new IllegalStateException("Embedding gradients are null. Call forward() and backward() before step().");
+        }
+
+        for (int i = 0; i < w.getRows(); i++) {
+            for (int j = 0; j < w.getCols(); j++) {
+                w.set(i, j, w.get(i, j) - learningRate * dW.get(i, j));
+            }
         }
     }
 
