@@ -81,6 +81,42 @@ public class Embedding {
         return out;
     }
 
+/**
+     * Forward pass (sequence form):
+     * ids: (batchSize x contextLen)
+     * returns: (batchSize*contextLen x dModel)
+     *
+     * Row mapping: row = b*contextLen + t
+     */
+    public Matrix forwardSeq(int[][] ids) {
+        if (ids == null) throw new IllegalArgumentException("ids cannot be null");
+        if (ids.length == 0) throw new IllegalArgumentException("ids must not be empty");
+
+        int batchSize = ids.length;
+        int contextLen = ids[0].length;
+        for (int i = 0; i < batchSize; i++) {
+            if (ids[i].length != contextLen) throw new IllegalArgumentException("ragged ids");
+        }
+        this.lastIds = ids;
+
+        Matrix out = new Matrix(batchSize * contextLen, dModel);
+
+        for (int b = 0; b < batchSize; b++) {
+            for (int t = 0; t < contextLen; t++) {
+                int tokenId = ids[b][t];
+                if (tokenId < 0 || tokenId >= vocabSize) {
+                    throw new IllegalArgumentException("token id out of range: " + tokenId);
+                }
+                int row = b * contextLen + t;
+                for (int j = 0; j < dModel; j++) {
+                    out.set(row, j, weights.get(tokenId, j));
+                }
+            }
+        }
+        return out;
+    }
+
+
     /**
      * Backward pass: accumulate gradients into embedding rows used in forward().
      *
@@ -112,6 +148,36 @@ public class Embedding {
             }
         }
     }
+    /**
+    * Backward pass for forwardSeq():
+    * dOut: (batchSize*contextLen x dModel)
+    */
+    public void backwardSeq(Matrix dOut) {
+        if (lastIds == null) throw new IllegalStateException("Must call forwardSeq() before backwardSeq().");
+
+        int batchSize = lastIds.length;
+        int contextLen = lastIds[0].length;
+
+        if (dOut.getRows() != batchSize * contextLen || dOut.getCols() != dModel) {
+            throw new IllegalArgumentException("dOut has wrong shape for backwardSeq()");
+        }
+
+        // reset grads
+        this.gradWeights = new Matrix(vocabSize, dModel);
+
+        for (int b = 0; b < batchSize; b++) {
+            for (int t = 0; t < contextLen; t++) {
+                int tokenId = lastIds[b][t];
+                int row = b * contextLen + t;
+
+                for (int j = 0; j < dModel; j++) {
+                    double g = dOut.get(row, j);
+                    gradWeights.set(tokenId, j, gradWeights.get(tokenId, j) + g);
+                }
+            }
+        }
+    }
+
 
     public Matrix getWeights() {
         return weights;
