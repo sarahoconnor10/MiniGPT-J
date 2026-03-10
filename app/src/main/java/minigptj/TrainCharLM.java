@@ -14,7 +14,14 @@ import minigptj.optim.SGD;
 public class TrainCharLM {
 
     public static void main(String[] args) {
-        String text = "Hello world\n";
+        String text =
+            "hello world\n" +
+            "hello there\n" +
+            "hello sarah\n" +
+            "how are you\n" +
+            "how is the world\n";
+        
+        text = text.repeat(20);
 
         CharTokenizer tok = CharTokenizer.fromText(text);
         int[] tokens = tok.encode(text);
@@ -27,7 +34,7 @@ public class TrainCharLM {
         TextDataset.Batch fullBatch = buildFullBatch(ds);
         int batchSize = fullBatch.x.length;
         
-        int steps = 2000;
+        int steps = 6000;
         double learningRate = 0.03;
 
         Embedding emb = new Embedding(vocabSize, dModel);
@@ -100,7 +107,7 @@ public class TrainCharLM {
                     pos,
                     contextLen,
                     dModel,
-                    "H",
+                    "h",
                     60
                 );
 
