@@ -3,8 +3,8 @@ package minigptj;
 import java.util.Random;
 
 import minigptj.core.Linear;
-import minigptj.core.LossFunctions;
 import minigptj.core.Matrix;
+import minigptj.core.ReLU;
 import minigptj.data.CharTokenizer;
 import minigptj.data.TextDataset;
 import minigptj.model.CausalSelfAttention;
@@ -17,24 +17,23 @@ public class TrainCharLM {
         String text =
             "hello world\n" +
             "hello there\n" +
-            "hello sarah\n" +
             "how are you\n" +
             "how is the world\n";
         
-        text = text.repeat(20);
+        text = text.repeat(5);
 
         CharTokenizer tok = CharTokenizer.fromText(text);
         int[] tokens = tok.encode(text);
         int vocabSize = tok.vocabSize();
 
-        int contextLen = 3;
+        int contextLen = 10;
         int dModel = 32;
         
         TextDataset ds = new TextDataset(tokens, contextLen);
-        TextDataset.Batch fullBatch = buildFullBatch(ds);
+        SequenceBatch fullBatch = buildFullSequenceBatch(ds, contextLen);
         int batchSize = fullBatch.x.length;
         
-        int steps = 6000;
+        int steps = 4000;
         double learningRate = 0.03;
 
         Embedding emb = new Embedding(vocabSize, dModel);
@@ -42,11 +41,15 @@ public class TrainCharLM {
         Linear outProj = new Linear(dModel, vocabSize);
         SGD opt = new SGD(learningRate);
 
+        Linear ffn1 = new Linear(dModel, dModel * 4);
+        ReLU ffnAct = new ReLU();
+        Linear ffn2 = new Linear(dModel * 4, dModel);
+
         Matrix pos = initPositionalEmbeddings(contextLen, dModel, new Random(123));
-        Random rng = new Random(42);
 
         for (int step = 1; step <= steps; step++) {
-            TextDataset.Batch batch = fullBatch;
+            SequenceBatch batch = fullBatch;
+
             Matrix xSeq = emb.forwardSeq(batch.x);
             addPositionalEmbeddings(xSeq, pos, batchSize, contextLen, dModel);
 
@@ -56,21 +59,39 @@ public class TrainCharLM {
             }
 
             Matrix attnOnly = attn.forward(xSeq);
-            Matrix attnOutSeq = attnOnly.add(xSeq);
+            Matrix attnOutSeq = attnOnly.add(xSeq); 
 
-            Matrix last = takeLastToken(attnOutSeq, batchSize, contextLen, dModel);
+            Matrix ffnHidden = ffn1.forward(attnOutSeq);
+            ffnHidden = ffnAct.forward(ffnHidden);
+            Matrix ffnOut = ffn2.forward(ffnHidden);
 
-            Matrix logits = outProj.forward(last);
+            Matrix blockOut = ffnOut.add(attnOutSeq); 
+
+            // Full-sequence supervision:
+            // blockOut shape = (batchSize * contextLen) x dModel
+            // logits shape   = (batchSize * contextLen) x vocabSize
+            Matrix logits = outProj.forward(blockOut);
             Matrix probs = logits.softmaxRows();
 
-            Matrix yTrue = LossFunctions.oneHotFromLabels(batch.y, vocabSize);
-            double loss = LossFunctions.crossEntropy(probs, yTrue);
-            Matrix dLogits = LossFunctions.softmaxCrossEntropyGrad(probs, yTrue);
+            int[] flatTargets = flattenTargets(batch.ySeq);
+            double loss = maskedCrossEntropy(probs, flatTargets, CharTokenizer.PAD_ID);
+            Matrix dLogits = maskedSoftmaxCrossEntropyGrad(probs, flatTargets, CharTokenizer.PAD_ID);
 
-            Matrix dLast = outProj.backward(dLogits);
-            Matrix dAttnOutSeq = scatterLastToken(dLast, batchSize, contextLen, dModel);
+            Matrix dBlockOut = outProj.backward(dLogits);
 
+            Matrix dFfnOut = dBlockOut;
+            Matrix dAttnOutSeq = dBlockOut;
+
+            Matrix dHidden = ffn2.backward(dFfnOut);
+            dHidden = ffnAct.backward(dHidden);
+            Matrix dFfnInput = ffn1.backward(dHidden);
+
+            dAttnOutSeq = dAttnOutSeq.add(dFfnInput);
+            
+            // blockOut = ffnOut + attnOutSeq
+            // attnOutSeq = attn.forward(xSeq) + xSeq
             Matrix dXSeq = attn.backward(dAttnOutSeq).add(dAttnOutSeq);
+
             emb.backwardSeq(dXSeq);
 
             Matrix gradPos = accumulatePosGradients(dXSeq, batchSize, contextLen, dModel);
@@ -93,6 +114,8 @@ public class TrainCharLM {
             opt.step(attn.getWv());
             opt.step(attn.getWo());
             opt.step(outProj);
+            opt.step(ffn1);
+            opt.step(ffn2);
 
             updatePositionalEmbeddings(pos, gradPos, learningRate);
 
@@ -103,6 +126,9 @@ public class TrainCharLM {
                     tok,
                     emb,
                     attn,
+                    ffn1,
+                    ffnAct,
+                    ffn2,
                     outProj,
                     pos,
                     contextLen,
@@ -120,6 +146,9 @@ public class TrainCharLM {
     private static String generate(CharTokenizer tok,
                                    Embedding emb,
                                    CausalSelfAttention attn,
+                                   Linear ffn1,
+                                   ReLU ffnAct,
+                                   Linear ffn2,
                                    Linear outProj,
                                    Matrix pos,
                                    int contextLen,
@@ -148,8 +177,12 @@ public class TrainCharLM {
 
             Matrix attnOnly = attn.forward(xSeq);
             Matrix attnOutSeq = attnOnly.add(xSeq);
+
+            Matrix ffnHidden = ffn1.forward(attnOutSeq);
+            ffnHidden = ffnAct.forward(ffnHidden);
+            Matrix blockOut = ffn2.forward(ffnHidden).add(attnOutSeq);
             
-            Matrix last = takeLastToken(attnOutSeq, 1, contextLen, dModel);
+            Matrix last = takeLastToken(blockOut, 1, contextLen, dModel);
 
             Matrix logits = outProj.forward(last);
             Matrix probs = logits.softmaxRows();
@@ -234,21 +267,6 @@ public class TrainCharLM {
         return last;
     }
 
-    private static Matrix scatterLastToken(Matrix dLast, int batchSize, int contextLen, int dModel) {
-        // place gradients on the final timestep of each sequence
-        Matrix dSeq = new Matrix(batchSize * contextLen, dModel);
-
-        for (int b = 0; b < batchSize; b++) {
-            int row = b * contextLen + (contextLen - 1);
-
-            for (int j = 0; j < dModel; j++) {
-                dSeq.set(row, j, dLast.get(b, j));
-            }
-        }
-
-        return dSeq;
-    }
-
     private static int argmaxRow(Matrix m, int row) {
         int bestIdx = 0;
         double bestVal = m.get(row, 0);
@@ -278,16 +296,108 @@ public class TrainCharLM {
         return Math.sqrt(sum);
     }
 
-    private static TextDataset.Batch buildFullBatch(TextDataset ds) {
-        int size = ds.size();
-        int[][] x = new int[size][];
-        int[] y = new int[size];
+    private static int[] flattenTargets(int[][] ySeq) {
+        int batchSize = ySeq.length;
+        int contextLen = ySeq[0].length;
+        int[] flat = new int[batchSize * contextLen];
 
-        for (int i = 0; i < size; i++) {
-            x[i] = ds.getContext(i);
-            y[i] = ds.getTarget(i);
+        int idx = 0;
+        for (int b = 0; b < batchSize; b++) {
+            for (int t = 0; t < contextLen; t++) {
+                flat[idx++] = ySeq[b][t];
+            }
         }
 
-        return new TextDataset.Batch(x, y);
+        return flat;
+    }
+
+    private static double maskedCrossEntropy(Matrix probs, int[] targets, int padId) {
+        double eps = 1e-12;
+        double loss = 0.0;
+        int count = 0;
+
+        for (int i = 0; i < targets.length; i++) {
+            int target = targets[i];
+
+            if (target == padId) {
+                continue;
+            }
+
+            double p = probs.get(i, target);
+            loss += -Math.log(Math.max(p, eps));
+            count++;
+        }
+
+        return count == 0 ? 0.0 : loss / count;
+    }
+
+    private static Matrix maskedSoftmaxCrossEntropyGrad(Matrix probs, int[] targets, int padId) {
+        Matrix grad = new Matrix(probs.getRows(), probs.getCols());
+
+        int count = 0;
+        for (int target : targets) {
+            if (target != padId) {
+                count++;
+            }
+        }
+
+        if (count == 0) {
+            return grad;
+        }
+
+        for (int i = 0; i < targets.length; i++) {
+            int target = targets[i];
+
+            if (target == padId) {
+                continue;
+            }
+
+            for (int j = 0; j < probs.getCols(); j++) {
+                grad.set(i, j, probs.get(i, j));
+            }
+
+            grad.set(i, target, grad.get(i, target) - 1.0);
+        }
+
+        double scale = 1.0 / count;
+
+        for (int i = 0; i < grad.getRows(); i++) {
+            for (int j = 0; j < grad.getCols(); j++) {
+                grad.set(i, j, grad.get(i, j) * scale);
+            }
+        }
+
+        return grad;
+    }
+
+    private static SequenceBatch buildFullSequenceBatch(TextDataset ds, int contextLen) {
+        int size = ds.size();
+        int[][] x = new int[size][];
+        int[][] ySeq = new int[size][contextLen];
+
+        for (int i = 0; i < size; i++) {
+            int[] ctx = ds.getContext(i);
+            x[i] = ctx;
+
+            // Shift the context left to create next-token targets for each position
+            for (int t = 0; t < contextLen - 1; t++) {
+                ySeq[i][t] = ctx[t + 1];
+            }
+
+            // Final target is the dataset's usual next token
+            ySeq[i][contextLen - 1] = ds.getTarget(i);
+        }
+
+        return new SequenceBatch(x, ySeq);
+    }
+
+    private static class SequenceBatch {
+        int[][] x;
+        int[][] ySeq;
+
+        SequenceBatch(int[][] x, int[][] ySeq) {
+            this.x = x;
+            this.ySeq = ySeq;
+        }
     }
 }
