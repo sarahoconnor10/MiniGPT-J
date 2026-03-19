@@ -20,10 +20,11 @@ public class Linear {
 
         weights = new Matrix(inputSize, outputSize);
 
-        // random small initialisation
+        double std = Math.sqrt(2.0 / (inputSize + outputSize));
+
         for (int i = 0; i < inputSize; i++) {
             for (int j = 0; j < outputSize; j++) {
-                weights.set(i, j, rand.nextGaussian() * 0.01);
+                weights.set(i, j, rand.nextGaussian() * std);
             }
         }
 

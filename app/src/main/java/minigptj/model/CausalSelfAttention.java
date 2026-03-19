@@ -29,6 +29,9 @@ public class CausalSelfAttention {
     private final Linear Wv;
     private final Linear Wo;
 
+    private boolean debugPrinted = false;
+    private boolean backwardDebugPrinted = false;
+
     // caches for backward
     private Matrix lastX;      // (B*T, dModel)
     private Matrix Q;          // (B*T, dModel)
@@ -72,6 +75,21 @@ public class CausalSelfAttention {
         scores = computeScores(Q, K);      // (B*T, T)
         attn = maskedSoftmax(scores);      // (B*T, T)
         context = computeContext(attn, V); // (B*T, dModel)
+
+        if (!debugPrinted) {
+            System.out.println("Q range: " + min(Q) + " to " + max(Q));
+            System.out.println("K range: " + min(K) + " to " + max(K));
+            System.out.println("V range: " + min(V) + " to " + max(V));
+            System.out.println("scores range: " + min(scores) + " to " + max(scores));
+            System.out.println("attn range: " + min(attn) + " to " + max(attn));
+
+            int lastRow = seqLen - 1;
+            System.out.println("attn row sum (last row, batch 0): " + rowSum(attn, lastRow));
+            System.out.println("attn row (last row, batch 0):");
+            printRow(attn, lastRow);
+
+            debugPrinted = true;
+        }
 
         return Wo.forward(context);
     }
@@ -161,6 +179,16 @@ public class CausalSelfAttention {
                     }
                 }
             }
+        }
+
+        if (!backwardDebugPrinted) {
+            System.out.println("dContext L2 = " + l2(dContext));
+            System.out.println("dAttn L2    = " + l2(dAttn));
+            System.out.println("dScores L2  = " + l2(dScores));
+            System.out.println("dQ L2       = " + l2(dQ));
+            System.out.println("dK L2       = " + l2(dK));
+            System.out.println("dV L2       = " + l2(dV));
+            backwardDebugPrinted = true;
         }
 
         // 5) Backprop through projection linears
@@ -310,4 +338,61 @@ public class CausalSelfAttention {
     public Linear getWk() { return Wk; }
     public Linear getWv() { return Wv; }
     public Linear getWo() { return Wo; }
+
+
+    private static double min(Matrix m) {
+        double min = m.get(0, 0);
+
+        for (int i = 0; i < m.getRows(); i++) {
+            for (int j = 0; j < m.getCols(); j++) {
+                min = Math.min(min, m.get(i, j));
+            }
+        }
+
+        return min;
+    }
+
+    private static double max(Matrix m) {
+        double max = m.get(0, 0);
+
+        for (int i = 0; i < m.getRows(); i++) {
+            for (int j = 0; j < m.getCols(); j++) {
+                max = Math.max(max, m.get(i, j));
+            }
+        }
+
+        return max;
+    }
+
+    private static double rowSum(Matrix m, int row) {
+        double sum = 0.0;
+        for (int j = 0; j < m.getCols(); j++) {
+            sum += m.get(row, j);
+        }
+        return sum;
+    }
+
+    private static void printRow(Matrix m, int row) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("[");
+        for (int j = 0; j < m.getCols(); j++) {
+            sb.append(String.format("%.4f", m.get(row, j)));
+            if (j < m.getCols() - 1) {
+                sb.append(", ");
+            }
+        }
+        sb.append("]");
+        System.out.println(sb.toString());
+    }
+
+    private static double l2(Matrix m) {
+        double sum = 0.0;
+        for (int i = 0; i < m.getRows(); i++) {
+            for (int j = 0; j < m.getCols(); j++) {
+                double v = m.get(i, j);
+                sum += v * v;
+            }
+        }
+        return Math.sqrt(sum);
+    }
 }

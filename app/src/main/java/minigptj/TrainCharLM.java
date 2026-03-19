@@ -34,7 +34,7 @@ public class TrainCharLM {
         int batchSize = fullBatch.x.length;
         
         int steps = 4000;
-        double learningRate = 0.03;
+        double learningRate = 0.01;
 
         Embedding emb = new Embedding(vocabSize, dModel);
         CausalSelfAttention attn = new CausalSelfAttention(dModel, contextLen);
