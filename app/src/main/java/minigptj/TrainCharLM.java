@@ -22,6 +22,8 @@ public class TrainCharLM {
         
         text = text.repeat(5);
 
+        Random sampleRng = new Random(42);
+        
         CharTokenizer tok = CharTokenizer.fromText(text);
         int[] tokens = tok.encode(text);
         int vocabSize = tok.vocabSize();
@@ -134,7 +136,9 @@ public class TrainCharLM {
                     contextLen,
                     dModel,
                     "h",
-                    60
+                    60,
+                    1.0,
+                    sampleRng
                 );
 
                 System.out.println("sample: " + sample.replace("\n", "\\n"));
@@ -154,7 +158,9 @@ public class TrainCharLM {
                                    int contextLen,
                                    int dModel,
                                    String prompt,
-                                   int maxNewChars) {
+                                   int maxNewChars,
+                                   double temperature,
+                                   Random rng) {
 
         StringBuilder out = new StringBuilder(prompt);
 
@@ -185,9 +191,10 @@ public class TrainCharLM {
             Matrix last = takeLastToken(blockOut, 1, contextLen, dModel);
 
             Matrix logits = outProj.forward(last);
-            Matrix probs = logits.softmaxRows();
+            Matrix probs = softmaxWithTemperature(logits, temperature);
 
-            int nextId = argmaxRow(probs, 0);
+            int nextId = sampleRow(probs, 0, rng);
+
             Character nextChar = tok.idToChar(nextId);
 
             if (nextChar == null) {
@@ -370,6 +377,54 @@ public class TrainCharLM {
         return grad;
     }
 
+    private static Matrix softmaxWithTemperature(Matrix logits, double temperature) {
+        if (temperature <= 0.0) {
+            throw new IllegalArgumentException("temperature must be > 0");
+        }
+
+        Matrix probs = new Matrix(logits.getRows(), logits.getCols());
+
+        for (int i = 0; i < logits.getRows(); i++) {
+            double max = Double.NEGATIVE_INFINITY;
+
+            // scale logits and find max for numerical stability
+            for (int j = 0; j < logits.getCols(); j++) {
+                double v = logits.get(i, j) / temperature;
+                if (v > max) {
+                    max = v;
+                }
+            }
+
+            double sumExp = 0.0;
+            for (int j = 0; j < logits.getCols(); j++) {
+                double e = Math.exp((logits.get(i, j) / temperature) - max);
+                probs.set(i, j, e);
+                sumExp += e;
+            }
+
+            for (int j = 0; j < logits.getCols(); j++) {
+                probs.set(i, j, probs.get(i, j) / sumExp);
+            }
+        }
+
+        return probs;
+    }
+
+    private static int sampleRow(Matrix probs, int row, Random rng) {
+        double r = rng.nextDouble();
+        double cumulative = 0.0;
+
+        for (int j = 0; j < probs.getCols(); j++) {
+            cumulative += probs.get(row, j);
+            if (r <= cumulative) {
+                return j;
+            }
+        }
+
+        // fallback for tiny floating-point errors
+        return probs.getCols() - 1;
+    }
+
     private static SequenceBatch buildFullSequenceBatch(TextDataset ds, int contextLen) {
         int size = ds.size();
         int[][] x = new int[size][];
@@ -400,4 +455,5 @@ public class TrainCharLM {
             this.ySeq = ySeq;
         }
     }
+
 }
