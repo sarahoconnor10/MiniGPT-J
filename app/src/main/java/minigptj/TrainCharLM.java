@@ -1,5 +1,7 @@
 package minigptj;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Random;
 
 import minigptj.core.Linear;
@@ -9,39 +11,35 @@ import minigptj.data.CharTokenizer;
 import minigptj.data.TextDataset;
 import minigptj.model.CausalSelfAttention;
 import minigptj.model.Embedding;
+import minigptj.optim.Adam;
 import minigptj.optim.SGD;
 
 public class TrainCharLM {
 
-    public static void main(String[] args) {
-        String text =
-            "hello world\n" +
-            "hello there\n" +
-            "how are you\n" +
-            "how is the world\n";
-        
-        text = text.repeat(5);
-
+    public static void main(String[] args) throws Exception {
+        String text = Files.readString(Path.of("app/src/main/java/minigptj/data/grimm_samples.txt"));
         Random sampleRng = new Random(42);
-        
+        Random batchRng = new Random(123);
+
         CharTokenizer tok = CharTokenizer.fromText(text);
         int[] tokens = tok.encode(text);
         int vocabSize = tok.vocabSize();
 
-        int contextLen = 10;
-        int dModel = 32;
+        int contextLen = 32;
+        int dModel = 96; //increase
         
         TextDataset ds = new TextDataset(tokens, contextLen);
-        SequenceBatch fullBatch = buildFullSequenceBatch(ds, contextLen);
-        int batchSize = fullBatch.x.length;
+
+        int batchSize = 64;
         
-        int steps = 4000;
-        double learningRate = 0.01;
+        int steps = 5000;
+        double learningRate = 0.02;
 
         Embedding emb = new Embedding(vocabSize, dModel);
         CausalSelfAttention attn = new CausalSelfAttention(dModel, contextLen);
         Linear outProj = new Linear(dModel, vocabSize);
-        SGD opt = new SGD(learningRate);
+        //SGD opt = new SGD(learningRate);
+        Adam opt = new Adam(0.001);
 
         Linear ffn1 = new Linear(dModel, dModel * 4);
         ReLU ffnAct = new ReLU();
@@ -50,7 +48,7 @@ public class TrainCharLM {
         Matrix pos = initPositionalEmbeddings(contextLen, dModel, new Random(123));
 
         for (int step = 1; step <= steps; step++) {
-            SequenceBatch batch = fullBatch;
+            SequenceBatch batch = sampleBatch(ds, contextLen, batchSize, batchRng);
 
             Matrix xSeq = emb.forwardSeq(batch.x);
             addPositionalEmbeddings(xSeq, pos, batchSize, contextLen, dModel);
@@ -110,6 +108,7 @@ public class TrainCharLM {
                 System.out.println("  pos dW L2     = " + l2(gradPos));
             }
 
+            opt.tick();
             opt.step(emb);
             opt.step(attn.getWq());
             opt.step(attn.getWk());
@@ -135,9 +134,9 @@ public class TrainCharLM {
                     pos,
                     contextLen,
                     dModel,
-                    "h",
-                    60,
-                    1.0,
+                    "The ",
+                    80,
+                    1.1,
                     sampleRng
                 );
 
@@ -441,6 +440,26 @@ public class TrainCharLM {
 
             // Final target is the dataset's usual next token
             ySeq[i][contextLen - 1] = ds.getTarget(i);
+        }
+
+        return new SequenceBatch(x, ySeq);
+    }
+
+    private static SequenceBatch sampleBatch(TextDataset ds, int contextLen, int batchSize, Random rng) {
+        int[][] x = new int[batchSize][];
+        int[][] ySeq = new int[batchSize][contextLen];
+
+        for (int b = 0; b < batchSize; b++) {
+            int idx = rng.nextInt(ds.size());
+
+            int[] ctx = ds.getContext(idx);
+            x[b] = ctx;
+
+            for (int t = 0; t < contextLen - 1; t++) {
+                ySeq[b][t] = ctx[t + 1];
+            }
+
+            ySeq[b][contextLen - 1] = ds.getTarget(idx);
         }
 
         return new SequenceBatch(x, ySeq);
