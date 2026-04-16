@@ -52,6 +52,9 @@ public class CausalSelfAttention {
         this.Wk = new Linear(dModel, dModel);
         this.Wv = new Linear(dModel, dModel);
         this.Wo = new Linear(dModel, dModel);
+
+        scaleWeights(Wq.getWeights(), 0.1);
+        scaleWeights(Wk.getWeights(), 0.1);
     }
 
     /**
@@ -394,5 +397,11 @@ public class CausalSelfAttention {
             }
         }
         return Math.sqrt(sum);
+    }
+
+    private static void scaleWeights(Matrix w, double scale) {
+    for (int i = 0; i < w.getRows(); i++)
+        for (int j = 0; j < w.getCols(); j++)
+            w.set(i, j, w.get(i, j) * scale);
     }
 }
