@@ -37,8 +37,8 @@ public class CausalSelfAttention {
     private final Linear Wv;
     private final Linear Wo;
 
-    private boolean debugPrinted = false;
-    private boolean backwardDebugPrinted = false;
+    private boolean debugPrinted = true;
+    private boolean backwardDebugPrinted = true;
 
     // caches for backward
     private Matrix lastX;      // (B*T, dModel)

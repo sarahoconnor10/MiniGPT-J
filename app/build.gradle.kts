@@ -10,7 +10,7 @@ java {
 }
 
 application {
-    mainClass.set("minigptj.Runner")
+    mainClass.set("minigptj.Demo")
 }
 
 dependencies {

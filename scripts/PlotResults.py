@@ -19,6 +19,7 @@ step 3000 | loss 2.4200
 
 # Adam optimiser run — Brothers Grimm dataset, 5000 steps
 ADAM_LOG = """
+step 1 | loss 4.0249
 step 200 | loss 2.2683
 step 400 | loss 2.1709
 step 600 | loss 2.0817
@@ -104,7 +105,7 @@ for step, (label, loss) in milestones.items():
 ax.set_xlabel('Training step', fontsize=11, color='#444')
 ax.set_ylabel('Cross-entropy loss', fontsize=11, color='#444')
 ax.set_title('Training loss: SGD vs Adam optimiser — MiniGPT-J', fontsize=13, fontweight='normal', pad=14)
-ax.set_ylim(0.5, 3.6)
+ax.set_ylim(0.5, 4.5)
 ax.set_xlim(0, max(adam_steps[-1], sgd_steps[-1]) * 1.05)
 
 ax.spines['top'].set_visible(False)
@@ -142,7 +143,7 @@ for step, (label, loss) in milestones.items():
 ax.set_xlabel('Training step', fontsize=11, color='#444')
 ax.set_ylabel('Cross-entropy loss', fontsize=11, color='#444')
 ax.set_title('Adam training loss over time — MiniGPT-J (Brothers Grimm dataset)', fontsize=13, fontweight='normal', pad=14)
-ax.set_ylim(0.5, 2.8)
+ax.set_ylim(0.5, 4.5)
 
 ax.spines['top'].set_visible(False)
 ax.spines['right'].set_visible(False)

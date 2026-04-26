@@ -12,6 +12,7 @@ import minigptj.data.TextDataset;
 import minigptj.model.CausalSelfAttention;
 import minigptj.model.Embedding;
 import minigptj.optim.Adam;
+import minigptj.ModelIO;
 
 /**
  * End-to-end training pipeline for MiniGPT-J.
@@ -40,8 +41,7 @@ public class TrainCharLM {
      */
     public static void main(String[] args) throws Exception {
         // Load training corpus and build tokenizer
-        String text = Files.readString(Path.of("app/src/main/java/minigptj/data/grimm_samples.txt"));
-        Random sampleRng = new Random(42);
+        String text = Files.readString(Path.of(System.getProperty("user.dir"), "app/src/main/java/minigptj/data/grimm_samples.txt"));        Random sampleRng = new Random(42);
         Random batchRng = new Random(123);
 
         CharTokenizer tok = CharTokenizer.fromText(text);
@@ -200,6 +200,8 @@ public class TrainCharLM {
                 System.out.println();
             }
         }
+        ModelIO.save("model.bin", emb, attn, ffn1, ffn2, outProj, pos);
+        System.out.println("Training complete. Model saved to model.bin");
     }
 
     /**
