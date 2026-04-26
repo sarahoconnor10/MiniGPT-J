@@ -1,18 +1,26 @@
 package minigptj.core;
 
 /**
- * ReLU activation layer.
+ * Rectified Linear Unit (ReLU) activation layer.
  *
- * Forward:  max(0, x)
- * Backward: passes gradient through where x > 0, blocks it where x <= 0.
+ * Forward pass:
+ *     f(x) = max(0, x)
  *
- * We store the last input so backward() knows which values were "active".
+ * Backward pass:
+ *     gradients pass through unchanged where x > 0
+ *     gradients are blocked where x <= 0
+ *
+ * The input from the most recent forward pass is cached so the backward
+ * pass can determine which neurons were active.
  */
 public class ReLU {
     private Matrix lastInput;
 
     /**
-     * Applies ReLU element-wise and caches the input for backprop.
+     * Applies ReLU element-wise.
+     *
+     * @param x input matrix
+     * @return activated output matrix
      */
     public Matrix forward(Matrix x) {
         this.lastInput = x;
@@ -20,17 +28,19 @@ public class ReLU {
     }
 
     /**
-     * Backprop through ReLU.
+     * Backpropagates gradients through the ReLU activation.
      *
-     * @param dOut upstream gradient (same shape as forward output)
-     * @return gradient w.r.t the input of ReLU
+     * Gradients are passed through only for elements whose original
+     * input value was greater than zero.
+     *
+     * @param dOut upstream gradient from the next layer
+     * @return gradient with respect to the ReLU input
      */
     public Matrix backward(Matrix dOut) {
         if (lastInput == null) {
             throw new IllegalStateException("Must call forward() before backward().");
         }
 
-        // Same shape as input/output
         Matrix dX = new Matrix(dOut.getRows(), dOut.getCols());
 
         for (int i = 0; i < dOut.getRows(); i++) {

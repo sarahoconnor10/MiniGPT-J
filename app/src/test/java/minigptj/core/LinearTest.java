@@ -27,11 +27,11 @@ public class LinearTest {
 
         // Overwrite weights with known values for testing
         Matrix w = layer.getWeights();
-        w.set(0, 0, 1.0);  
+        w.set(0, 0, 1.0);
         w.set(0, 1, 2.0);
-        w.set(1, 0, 3.0);  
+        w.set(1, 0, 3.0);
         w.set(1, 1, 4.0);
-        w.set(2, 0, 5.0);  
+        w.set(2, 0, 5.0);
         w.set(2, 1, 6.0);
 
         // Overwrite bias with zeros
@@ -58,9 +58,9 @@ public class LinearTest {
 
         // Set weights to zero
         Matrix w = layer.getWeights();
-        w.set(0,0,0); 
+        w.set(0,0,0);
         w.set(0,1,0);
-        w.set(1,0,0); 
+        w.set(1,0,0);
         w.set(1,1,0);
 
         // Set bias to known values
@@ -78,39 +78,39 @@ public class LinearTest {
         assertEquals(5.0, out.get(0, 0), 1e-9);
         assertEquals(7.0, out.get(0, 1), 1e-9);
     }
-    
+
     @Test
     void testBackwardComputesGradientsCorrectly() {
         Linear layer = new Linear(2, 2);
-        
+
         // Set deterministic weights W = [[1,2],[3,4]]
         Matrix w = layer.getWeights();
         w.set(0, 0, 1.0); w.set(0, 1, 2.0);
         w.set(1, 0, 3.0); w.set(1, 1, 4.0);
-        
+
         // Bias doesn't affect gradients of W/db for this layer's backward,
         // but set to 0 for cleanliness.
         Matrix b = layer.getBias();
         b.set(0, 0, 0.0);
         b.set(0, 1, 0.0);
-        
+
         // Batch size 2: X shape (2x2)
         Matrix x = new Matrix(new double[][] {
             {1.0, 0.0},
             {0.0, 1.0}
         });
-        
+
         // Must call forward to cache lastInput
         layer.forward(x);
-        
+
         // Upstream gradient dOut shape (2x2)
         Matrix dOut = new Matrix(new double[][] {
             {1.0, 2.0},
             {3.0, 4.0}
         });
-        
+
         Matrix dX = layer.backward(dOut);
-        
+
         // ---- Expected dX = dOut * W^T ----
         // W^T = [[1,3],[2,4]]
         // Row0: [1,2] * W^T => [1*1+2*2=5, 1*3+2*4=11]
@@ -119,7 +119,7 @@ public class LinearTest {
         assertEquals(11.0, dX.get(0, 1), 1e-9);
         assertEquals(11.0, dX.get(1, 0), 1e-9);
         assertEquals(25.0, dX.get(1, 1), 1e-9);
-        
+
         // ---- Expected dW = X^T * dOut ----
         // X is identity so X^T * dOut = dOut
         Matrix dW = layer.getGradWeights();
@@ -127,7 +127,7 @@ public class LinearTest {
         assertEquals(2.0, dW.get(0, 1), 1e-9);
         assertEquals(3.0, dW.get(1, 0), 1e-9);
         assertEquals(4.0, dW.get(1, 1), 1e-9);
-        
+
         // ---- Expected db = sum rows of dOut ----
         // col0: 1 + 3 = 4
         // col1: 2 + 4 = 6
@@ -135,7 +135,7 @@ public class LinearTest {
         assertEquals(4.0, db.get(0, 0), 1e-9);
         assertEquals(6.0, db.get(0, 1), 1e-9);
     }
-    
+
     @Test
     void testBackwardGradientShapes() {
         Linear layer = new Linear(3, 2);
@@ -182,4 +182,3 @@ public class LinearTest {
     }
 
 }
-    

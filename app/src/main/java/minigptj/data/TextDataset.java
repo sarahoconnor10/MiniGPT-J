@@ -3,10 +3,18 @@ package minigptj.data;
 import java.util.Random;
 
 /**
- * TextDataset turns a token stream into (context -> next token) training examples.
+ * Converts a token stream into training examples for language modelling.
  *
- * Language modelling task:
- *   Given previous tokens (context), predict the next token (target).
+ * Each example follows the task:
+ *
+ *     given a fixed-length context window, predict the next token
+ *
+ * For example, with text "hello" and context length 3:
+ *
+ *     context: [PAD, PAD, h] -> target: e
+ *     context: [PAD, h, e]   -> target: l
+ *     context: [h, e, l]     -> target: l
+ *     context: [e, l, l]     -> target: o
  */
 public class TextDataset {
     private final int[] tokens;
@@ -14,10 +22,12 @@ public class TextDataset {
     private final int padId;
 
     /**
-     * @param tokens     full tokenised text (e.g., output of tokenizer.encode)
-     * @param contextLen number of previous tokens used as input context
-     * @param padId      token id used for left padding (usually CharTokenizer.PAD_ID)
-    */
+     * Creates a dataset from a tokenised text sequence.
+     *
+     * @param tokens full tokenised text
+     * @param contextLen number of previous tokens used as context
+     * @param padId token ID used for left padding
+     */
     public TextDataset(int[] tokens, int contextLen, int padId) {
         if (tokens == null) throw new IllegalArgumentException("tokens cannot be null");
         if (tokens.length < 2) throw new IllegalArgumentException("need at least 2 tokens to form training pairs");
@@ -28,25 +38,35 @@ public class TextDataset {
         this.padId = padId;
     }
 
-    /** Constructor using CharTokenizer.PAD_ID. */
+    /**
+     * Creates a dataset using CharTokenizer.PAD_ID as the padding token.
+     *
+     * @param tokens full tokenised text
+     * @param contextLen number of previous tokens used as context
+     */
     public TextDataset(int[] tokens, int contextLen) {
         this(tokens, contextLen, CharTokenizer.PAD_ID);
     }
 
     /**
-     * Number of training examples.
-     * We predict tokens[i+1] from context ending at tokens[i].
+     * Returns the number of available training examples.
+     *
+     * Example index i predicts tokens[i + 1] from a context ending at tokens[i].
+     *
+     * @return number of context-target pairs
      */
     public int size() {
         return tokens.length - 1;
     }
 
     /**
-     * Returns the context window (length = contextLen) for a given example index.
+     * Returns the fixed-length context window for a training example.
      *
-     * Example index i corresponds to predicting tokens[i+1].
-     * The context ends at tokens[i] and looks back contextLen tokens.
-     * Missing left positions are padded with padId.
+     * If there are not enough previous tokens at the start of the sequence,
+     * the missing positions are left-padded using padId.
+     *
+     * @param index training example index
+     * @return context token IDs of length contextLen
      */
     public int[] getContext(int index) {
         if (index < 0 || index >= size()) {
@@ -68,8 +88,12 @@ public class TextDataset {
     }
 
     /**
-     * Returns the target token id (the "next token") for a given example index.
-     * Example index i targets tokens[i+1].
+     * Returns the target token for a training example.
+     *
+     * The target is the next token after the context window.
+     *
+     * @param index training example index
+     * @return target token ID
      */
     public int getTarget(int index) {
         if (index < 0 || index >= size()) {
@@ -79,8 +103,11 @@ public class TextDataset {
     }
 
     /**
-     * Sample a random batch (with replacement).
-     * Useful for SGD training loops.
+     * Samples a random batch of context-target pairs with replacement.
+     *
+     * @param batchSize number of examples in the batch
+     * @param rng random number generator
+     * @return sampled batch
      */
     public Batch sampleBatch(int batchSize, Random rng) {
         if (batchSize < 1) throw new IllegalArgumentException("batchSize must be >= 1");
@@ -98,11 +125,22 @@ public class TextDataset {
         return new Batch(xBatch, yBatch);
     }
 
-    /** Simple batch container. */
+    /**
+     * Immutable container for a batch of training examples.
+     */
     public static class Batch {
-        public final int[][] x; // shape: [batchSize][contextLen]
-        public final int[] y;   // shape: [batchSize]
+        /** Context windows, shape: batchSize x contextLen. */
+        public final int[][] x;
 
+        /** Target token IDs, shape: batchSize. */
+        public final int[] y;
+
+        /**
+         * Creates a batch container.
+         *
+         * @param x context windows
+         * @param y target token IDs
+         */
         public Batch(int[][] x, int[] y) {
             this.x = x;
             this.y = y;

@@ -1,6 +1,19 @@
 package minigptj.core;
 
-public class LossFunctions {
+/**
+ * Utility class containing loss functions and loss gradients used during training.
+ *
+ * Loss functions measure how far the model's predictions are from the expected
+ * targets. The corresponding gradients provide the starting point for
+ * backpropagation.
+ */
+public final class LossFunctions {
+    /**
+     * Prevent instantiation of utility class.
+     */
+    private LossFunctions() {
+    }
+
     /**
      * Computes the Mean Squared Error (MSE) between a predicted matrix
      * and an actual target matrix.
@@ -33,14 +46,11 @@ public class LossFunctions {
     }
 
     /**
-     * Computes the categorical cross-entropy loss between predicted probabilities
-     * and actual one-hot encoded class labels.
-     * Each row represents one training example.
-     * 
-     * Cross-entropy for each row is:
-     *   -log(predicted_probability_of_correct_class)
+     * Computes categorical cross-entropy loss between predicted probabilities
+     * and one-hot encoded target labels.
      *
-     * For numerical stability, probabilities are clamped between [epsilon, 1 - epsilon].
+     * Each row represents one training example. For each row, only the
+     * probability assigned to the correct class contributes to the loss.
      *
      * @param predicted a matrix of predicted probabilities (e.g., from softmax)
      * @param actual a matrix of one-hot encoded true labels
@@ -77,11 +87,17 @@ public class LossFunctions {
     }
 
     /**
-     * Converts class labels into a one-hot matrix.
+     * Converts integer class labels into a one-hot encoded matrix.
      *
-     * @param labels array of length batchSize, each value in [0, numClasses)
-     * @param numClasses number of classes (e.g. vocab size)
-     * @return Matrix of shape (batchSize x numClasses)
+     * Example:
+     * labels = [2, 0], numClasses = 3
+     * output =
+     * [0, 0, 1]
+     * [1, 0, 0]
+     *
+     * @param labels class labels, each in the range [0, numClasses)
+     * @param numClasses total number of classes
+     * @return one-hot matrix of shape labels.length x numClasses
      */
     public static Matrix oneHotFromLabels(int[] labels, int numClasses) {
         if (labels == null) throw new IllegalArgumentException("labels cannot be null");
@@ -99,14 +115,19 @@ public class LossFunctions {
     }
 
     /**
-     * Gradient of (softmax + cross-entropy) w.r.t logits.
+     * Computes the gradient of softmax combined with cross-entropy loss.
      *
-     * If probs = softmax(logits) and yTrue is one-hot, then:
-     *   dLogits = (probs - yTrue) / batchSize
+     * If:
+     *     probs = softmax(logits)
      *
-     * @param probs  predicted probabilities (batchSize x numClasses)
-     * @param yTrue  one-hot true labels (batchSize x numClasses)
-     * @return dLogits (batchSize x numClasses)
+     * Then:
+     *     dLogits = (probs - yTrue) / batchSize
+     *
+     * This simplification is standard for classification and language modelling.
+     *
+     * @param probs predicted probabilities, shape batchSize x numClasses
+     * @param yTrue one-hot encoded targets, shape batchSize x numClasses
+     * @return gradient with respect to logits
      */
     public static Matrix softmaxCrossEntropyGrad(Matrix probs, Matrix yTrue) {
         if (probs.getRows() != yTrue.getRows() || probs.getCols() != yTrue.getCols()) {
@@ -126,5 +147,4 @@ public class LossFunctions {
         }
         return dLogits;
     }
-
 }

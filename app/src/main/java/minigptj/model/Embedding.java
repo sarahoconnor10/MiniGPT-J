@@ -7,9 +7,13 @@ import minigptj.core.Matrix;
 /**
  * Learned token embedding layer.
  *
- * Maps token IDs to dense vectors of length dModel.
- * We return a 2D Matrix shaped (batchSize x (contextLen * dModel)
+ * Maps discrete token IDs into dense vectors of length dModel. This allows the
+ * model to learn useful continuous representations of characters rather than
+ * relying only on sparse one-hot encodings.
  *
+ * The class supports two output layouts:
+ * - flattened layout: batchSize x (contextLen * dModel)
+ * - sequence layout: (batchSize * contextLen) x dModel
  */
 public class Embedding {
     private final int vocabSize;
@@ -21,6 +25,12 @@ public class Embedding {
     // cache last input IDs for backprop
     private int[][] lastIds;
 
+    /**
+     * Creates an embedding layer with randomly initialised weights.
+     *
+     * @param vocabSize number of tokens in the vocabulary
+     * @param dModel size of each learned embedding vector
+     */
     public Embedding(int vocabSize, int dModel) {
         if (vocabSize < 2) throw new IllegalArgumentException("vocabSize must be >= 2");
         if (dModel < 1) throw new IllegalArgumentException("dModel must be >= 1");
@@ -41,10 +51,16 @@ public class Embedding {
     }
 
     /**
-     * Forward pass: lookup embeddings and flatten per token position.
+     * Performs a forward pass using flattened output layout.
      *
-     * @param ids shape: (batchSize x contextLen)
-     * @return output shape: (batchSize x (contextLen * dModel))
+     * Input shape:
+     *     batchSize x contextLen
+     *
+     * Output shape:
+     *     batchSize x (contextLen * dModel)
+     *
+     * @param ids token IDs for each context window
+     * @return flattened embedding matrix
      */
     public Matrix forward(int[][] ids) {
         if (ids == null) throw new IllegalArgumentException("ids cannot be null");
@@ -81,12 +97,22 @@ public class Embedding {
         return out;
     }
 
-/**
-     * Forward pass (sequence form):
-     * ids: (batchSize x contextLen)
-     * returns: (batchSize*contextLen x dModel)
+    /**
+     * Performs a forward pass using sequence output layout.
      *
-     * Row mapping: row = b*contextLen + t
+     * Input shape:
+     *     batchSize x contextLen
+     *
+     * Output shape:
+     *     (batchSize * contextLen) x dModel
+     *
+     * Row mapping:
+     *     row = batchIndex * contextLen + tokenPosition
+     *
+     * This layout is used by the causal self-attention layer.
+     *
+     * @param ids token IDs for each context window
+     * @return sequence-form embedding matrix
      */
     public Matrix forwardSeq(int[][] ids) {
         if (ids == null) throw new IllegalArgumentException("ids cannot be null");
@@ -118,9 +144,13 @@ public class Embedding {
 
 
     /**
-     * Backward pass: accumulate gradients into embedding rows used in forward().
+     * Backward pass for the flattened forward layout.
      *
-     * @param dOut shape: (batchSize x (contextLen * dModel))
+     * Gradients are accumulated into the embedding rows used during the most
+     * recent forward pass. If the same token appears multiple times, its
+     * gradients are summed.
+     *
+     * @param dOut upstream gradient of shape batchSize x (contextLen * dModel)
      */
     public void backward(Matrix dOut) {
         if (lastIds == null) throw new IllegalStateException("Must call forward() before backward().");
@@ -149,9 +179,13 @@ public class Embedding {
         }
     }
     /**
-    * Backward pass for forwardSeq():
-    * dOut: (batchSize*contextLen x dModel)
-    */
+     * Backward pass for the sequence forward layout.
+     *
+     * This is used when embeddings are passed into the transformer attention
+     * block in sequence form.
+     *
+     * @param dOut upstream gradient of shape (batchSize * contextLen) x dModel
+     */
     public void backwardSeq(Matrix dOut) {
         if (lastIds == null) throw new IllegalStateException("Must call forwardSeq() before backwardSeq().");
 
@@ -178,19 +212,38 @@ public class Embedding {
         }
     }
 
-
+    /**
+     * Returns the trainable embedding matrix.
+     *
+     * @return embedding weights with shape vocabSize x dModel
+     */
     public Matrix getWeights() {
         return weights;
     }
 
+    /**
+     * Returns the most recent embedding gradients.
+     *
+     * @return gradient matrix for the embedding weights
+     */
     public Matrix getGradWeights() {
         return gradWeights;
     }
 
+    /**
+     * Returns the number of tokens in the vocabulary.
+     *
+     * @return vocabulary size
+     */
     public int getVocabSize() {
         return vocabSize;
     }
 
+    /**
+     * Returns the embedding dimension.
+     *
+     * @return size of each embedding vector
+     */
     public int getDModel() {
         return dModel;
     }

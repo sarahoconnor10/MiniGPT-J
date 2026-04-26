@@ -16,6 +16,11 @@ import minigptj.optim.SGD;
  * Loss should decrease over epochs and learned weights should converge.
  */
 public class TrainLinearDemo {
+    /**
+     * Runs the linear-layer training demonstration.
+     *
+     * @param args command-line arguments, unused
+     */
     public static void main(String[] args) {
         /*
          * PROBLEM SETUP:

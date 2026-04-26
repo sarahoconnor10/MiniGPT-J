@@ -3,11 +3,35 @@ package minigptj.data;
 import minigptj.core.Matrix;
 
 /**
- * Utility to convert token ids into one-hot encoded matrices.
+ * Utility class for converting token IDs into one-hot encoded matrices.
+ *
+ * One-hot encoding represents each token as a sparse vector where:
+ * - the token's index is set to 1
+ * - all other positions are 0
+ *
+ * These encodings were used in earlier stages of the project before
+ * embedding layers were introduced.
  */
-public class OneHot {
+public final class OneHot {
+    /**
+     * Prevent instantiation of utility class.
+     */
+    private OneHot() {
+    }
 
-    /** ids: [batchSize] -> Matrix [batchSize, vocabSize] */
+    /**
+     * Converts a 1D array of token IDs into a one-hot encoded matrix.
+     *
+     * Input shape:
+     *     [batchSize]
+     *
+     * Output shape:
+     *     [batchSize x vocabSize]
+     *
+     * @param ids token IDs
+     * @param vocabSize vocabulary size
+     * @return one-hot encoded matrix
+     */
     public static Matrix encode1D(int[] ids, int vocabSize) {
         if (ids == null) throw new IllegalArgumentException("ids cannot be null");
         if (vocabSize < 2) throw new IllegalArgumentException("vocabSize must be >= 2");
@@ -24,8 +48,20 @@ public class OneHot {
     }
 
     /**
-     * contextIds: [batchSize][contextLen]
-     * Uses ONLY the last token in each context window -> Matrix [batchSize, vocabSize]
+     * Encodes only the final token from each context window.
+     *
+     * Input shape:
+     *     [batchSize][contextLen]
+     *
+     * Output shape:
+     *     [batchSize x vocabSize]
+     *
+     * This method was useful in earlier experiments where only the most
+     * recent token in a context window was used for prediction.
+     *
+     * @param contextIds batched context windows
+     * @param vocabSize vocabulary size
+     * @return one-hot encoded matrix of final context tokens
      */
     public static Matrix encodeContextLast(int[][] contextIds, int vocabSize) {
         if (contextIds == null) throw new IllegalArgumentException("contextIds cannot be null");
@@ -46,13 +82,22 @@ public class OneHot {
     }
 
     /**
-     * contextIds: [batchSize][contextLen]
-     * Concatenates one-hot vectors for the entire context window.
+     * Concatenates one-hot encodings for an entire context window.
      *
-     * Output shape: [batchSize, contextLen * vocabSize]
+     * Input shape:
+     *     [batchSize][contextLen]
      *
-     * For each position t in the context:
-     *   we place a 1.0 at column (t * vocabSize + tokenId)
+     * Output shape:
+     *     [batchSize x (contextLen * vocabSize)]
+     *
+     * Each token position occupies its own block of vocabSize columns.
+     *
+     * Example:
+     *     column = (position * vocabSize) + tokenId
+     *
+     * @param contextIds batched context windows
+     * @param vocabSize vocabulary size
+     * @return concatenated one-hot matrix
      */
     public static Matrix encodeContextConcat(int[][] contextIds, int vocabSize) {
         if (contextIds == null) throw new IllegalArgumentException("contextIds cannot be null");

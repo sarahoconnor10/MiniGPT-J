@@ -1,12 +1,20 @@
 package minigptj.core;
 
 /**
- * A simple two-layer feed-forward neural network:
+ * Simple two-layer multilayer perceptron (MLP).
  *
- *   input -> Linear -> ReLU -> Linear -> (logits)
+ * Architecture:
  *
- * This class currently supports forward-only computation.
- * Training (backpropagation) will be implemented separately.
+ *     input -> Linear -> ReLU -> Linear -> logits
+ *
+ * This class was developed as an early neural network architecture
+ * before the transformer-based language model was introduced.
+ *
+ * It provides a simpler baseline model for validating:
+ * - matrix operations
+ * - forward propagation
+ * - activation behaviour
+ * - output generation
  */
 public class SimpleMLP {
     private final Linear layer1;
@@ -21,7 +29,7 @@ public class SimpleMLP {
      *
      * @param inputSize  number of input features
      * @param hiddenSize number of hidden units in the intermediate layer
-     * @param outputSize number of output units (e.g. number of classes)
+     * @param outputSize number of output units
      */
     public SimpleMLP(int inputSize, int hiddenSize, int outputSize) {
         this.inputSize = inputSize;
@@ -51,25 +59,42 @@ public class SimpleMLP {
     }
 
     /**
-     * Performs a full forward pass and returns probabilities via softmax.
+     * Performs a full forward pass followed by row-wise softmax.
      *
-     * @param input a Matrix of shape (batchSize x inputSize)
-     * @return probabilities with shape (batchSize x outputSize),
-     *         where each row sums to 1.
+     * Converts logits into probability distributions where each row
+     * sums to 1.
+     *
+     * @param input matrix of shape batchSize x inputSize
+     * @return probability matrix of shape batchSize x outputSize
      */
     public Matrix forwardWithSoftmax(Matrix input) {
         Matrix logits = forward(input);
         return logits.softmaxRows();
     }
 
+    /**
+     * Returns the expected input feature count.
+     *
+     * @return input size
+     */
     public int getInputSize() {
         return inputSize;
     }
 
+    /**
+     * Returns the hidden layer size.
+     *
+     * @return hidden size
+     */
     public int getHiddenSize() {
         return hiddenSize;
     }
 
+    /**
+     * Returns the output feature count.
+     *
+     * @return output size
+     */
     public int getOutputSize() {
         return outputSize;
     }

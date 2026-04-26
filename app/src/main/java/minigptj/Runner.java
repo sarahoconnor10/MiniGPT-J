@@ -8,7 +8,19 @@ import minigptj.data.OneHot;
 import minigptj.data.TextDataset;
 import minigptj.core.Matrix;
 
+/**
+ * Small manual runner used for early data pipeline sanity checks.
+ *
+ * This class is not part of the final training pipeline. It provides a simple
+ * way to inspect tokenisation, dataset context windows, target values, and
+ * one-hot encoding output on a tiny example string.
+ */
 public class Runner {
+    /**
+     * Runs the manual data pipeline sanity check.
+     *
+     * @param args command-line arguments, unused
+     */
     public static void main(String[] args) {
         String text = "test\n";
 

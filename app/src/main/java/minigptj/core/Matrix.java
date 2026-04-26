@@ -2,17 +2,37 @@ package minigptj.core;
 
 import java.util.function.Function;
 
+/**
+ * Basic 2D matrix implementation used throughout MiniGPT-J.
+ *
+ * This class provides the core numerical operations needed for the model,
+ * including matrix addition, scalar multiplication, matrix multiplication,
+ * transposition, element-wise function application, and row-wise softmax.
+ */
 public class Matrix {
     private final int rows;
     private final int cols;
     private final double[][] data;
 
+    /**
+     * Creates a zero-initialised matrix with the given shape.
+     *
+     * @param rows number of rows
+     * @param cols number of columns
+     */
     public Matrix(int rows, int cols) {
         this.rows = rows;
         this.cols = cols;
         this.data = new double[rows][cols];
     }
 
+    /**
+     * Creates a matrix by copying values from a 2D array.
+     *
+     * The input array must be rectangular.
+     *
+     * @param data source values
+     */
     public Matrix(double[][] data) {
         this.rows = data.length;
         this.cols = data[0].length;
@@ -27,22 +47,49 @@ public class Matrix {
     }
 
 
+    /**
+     * Returns the number of rows.
+     *
+     * @return row count
+     */
     public int getRows() {
         return rows;
     }
 
+    /**
+     * Returns the number of columns.
+     *
+     * @return column count
+     */
     public int getCols() {
         return cols;
     }
 
+    /**
+     * Returns the value at a matrix position.
+     *
+     * @param row row index
+     * @param col column index
+     * @return value stored at the requested position
+     */
     public double get(int row, int col) {
         return data[row][col];
     }
 
+    /**
+     * Sets the value at a matrix position.
+     *
+     * @param row row index
+     * @param col column index
+     * @param value value to store
+     */
     public void set(int row, int col, double value) {
         data[row][col] = value;
     }
 
+    /**
+     * Returns a formatted string representation for debugging.
+     */
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();
@@ -57,6 +104,12 @@ public class Matrix {
         return sb.toString();
     }
 
+    /**
+     * Adds two matrices element-wise.
+     *
+     * @param other matrix with the same shape
+     * @return new matrix containing this + other
+     */
     public Matrix add(Matrix other) {
         if (this.rows != other.rows || this.cols != other.cols) {
             throw new IllegalArgumentException("Matrix dimensions must match for addition");
@@ -71,6 +124,12 @@ public class Matrix {
         return result;
     }
 
+    /**
+     * Multiplies every matrix value by a scalar.
+     *
+     * @param scalar scalar multiplier
+     * @return new scaled matrix
+     */
     public Matrix multiply(double scalar) {
         Matrix result = new Matrix(rows, cols);
         for (int i = 0; i < rows; i++) {
@@ -81,6 +140,15 @@ public class Matrix {
         return result;
     }
 
+    /**
+     * Performs matrix multiplication.
+     *
+     * If this matrix has shape A x B, the other matrix must have shape B x C.
+     * The returned matrix has shape A x C.
+     *
+     * @param other right-hand matrix
+     * @return matrix product
+     */
     public Matrix dot(Matrix other) {
         if (this.cols != other.rows) {
             throw new IllegalArgumentException("Incompatible matrix dimensions for dot product");
@@ -101,6 +169,14 @@ public class Matrix {
         return result;
     }
 
+    /**
+     * Applies a function to every element in the matrix.
+     *
+     * Used for operations such as applying activation functions.
+     *
+     * @param func function to apply to each value
+     * @return new matrix containing transformed values
+     */
     public Matrix apply(Function<Double, Double> func) {
         Matrix result = new Matrix(rows, cols);
         for (int i = 0; i < rows; i++) {
@@ -111,6 +187,11 @@ public class Matrix {
         return result;
     }
 
+    /**
+     * Transposes the matrix.
+     *
+     * @return new matrix with rows and columns swapped
+     */
     public Matrix transpose() {
         Matrix result = new Matrix(cols, rows);
         for (int i = 0; i < rows; i++) {
@@ -121,6 +202,15 @@ public class Matrix {
         return result;
     }
 
+    /**
+     * Applies softmax independently to each row.
+     *
+     * This converts each row into a probability distribution whose values sum
+     * to 1. The row maximum is subtracted before exponentiation for numerical
+     * stability.
+     *
+     * @return row-wise softmax probabilities
+     */
     public Matrix softmaxRows() {
         Matrix result = new Matrix(rows, cols);
 

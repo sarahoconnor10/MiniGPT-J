@@ -5,23 +5,24 @@ import minigptj.core.Matrix;
 import minigptj.model.Embedding;
 
 /**
- * Stochastic Gradient Descent (SGD) optimizer.
+ * Stochastic Gradient Descent (SGD) optimiser.
  *
- * This class is responsible for updating the parameters of a trainable layer
- * using gradients computed during backpropagation.
+ * SGD updates model parameters using the gradient of the loss with respect
+ * to each parameter. A fixed learning rate is applied uniformly across all
+ * parameters.
  *
- * SGD applies the update rule:
+ * Update rule:
  *
  *   parameter = parameter - learningRate * gradient
  *
- * The optimizer does not compute gradients itself — it only applies them.
- * This separation keeps layer logic independent from training strategy.
+ * This optimiser does not compute gradients itself. Gradients are expected
+ * to be produced during backpropagation by the corresponding layer.
  */
 public class SGD {
     private final double learningRate;
 
     /**
-     * Create a new SGD optimizer.
+     * Creates a new SGD optimiser.
      *
      * @param learningRate the step size used when updating parameters
      */
@@ -29,15 +30,16 @@ public class SGD {
         this.learningRate = learningRate;
     }
     /**
-     * Apply one optimisation step to a Linear layer.
+     * Applies one optimisation step to a Linear layer.
      *
-     * This method assumes that:
-     *  1) forward() has been called to cache inputs
-     *  2) backward() has been called to compute gradients
+     * Both the weight matrix and bias vector are updated in-place using
+     * gradients computed during backpropagation.
      *
-     * It then updates the layer's weights and bias in-place using SGD.
+     * This method assumes:
+     * - forward() has already been called
+     * - backward() has already been called
      *
-     * @param layer the Linear layer whose parameters should be updated
+     * @param layer Linear layer to update
      */
     public void step(Linear layer) {
         Matrix w = layer.getWeights();
@@ -69,7 +71,10 @@ public class SGD {
     /**
      * Apply one optimisation step to an Embedding layer.
      *
-     * weights = weights - lr * gradWeights
+     * The embedding matrix is updated in-place using accumulated embedding
+     * gradients from the backward pass.
+     *
+     * @param emb embedding layer to update
      */
     public void step(Embedding emb) {
         Matrix w = emb.getWeights();
@@ -85,5 +90,4 @@ public class SGD {
             }
         }
     }
-
 }

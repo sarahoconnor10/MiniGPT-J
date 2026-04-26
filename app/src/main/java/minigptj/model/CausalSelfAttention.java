@@ -4,21 +4,29 @@ import minigptj.core.Linear;
 import minigptj.core.Matrix;
 
 /**
- * Minimal single-head causal self-attention:
- * - Uses Matrix get/set + constructors.
- * - Uses existing Linear layers for projections (forward/backward).
+ * Implements single-head causal self-attention.
  *
- * Shapes:
- *   Input X:  (B*T, dModel)   where row = b*T + t
- *   Output Y: (B*T, dModel)
+ * This is the core transformer component used in MiniGPT-J. It allows each token
+ * to attend to earlier tokens in the same sequence while preventing access to
+ * future tokens using a causal mask.
  *
- * Internals (per batch block):
- *   Q = XWq, K = XWk, V = XWv
- *   scores[tq, tk] = (Q[tq] · K[tk]) / sqrt(dModel)
- *   causal mask: tk > tq masked
- *   attn = softmax(scores)
- *   context[tq] = Σ_k attn[tq,k] * V[k]
- *   Y = context * Wo
+ * Input shape:
+ *     (batchSize * seqLen) x dModel
+ *
+ * Output shape:
+ *     (batchSize * seqLen) x dModel
+ *
+ * Row mapping:
+ *     row = batchIndex * seqLen + tokenPosition
+ *
+ * Forward pass:
+ *     Q = XWq
+ *     K = XWk
+ *     V = XWv
+ *     scores = QK^T / sqrt(dModel)
+ *     attn = causalMaskedSoftmax(scores)
+ *     context = attn * V
+ *     output = context * Wo
  */
 public class CausalSelfAttention {
     private final int dModel;
@@ -41,6 +49,12 @@ public class CausalSelfAttention {
     private Matrix attn;       // (B*T, T)
     private Matrix context;    // (B*T, dModel)
 
+    /**
+     * Creates a single-head causal self-attention layer.
+     *
+     * @param dModel embedding dimension
+     * @param seqLen fixed sequence length used by the attention mask
+     */
     public CausalSelfAttention(int dModel, int seqLen) {
         if (dModel < 1) throw new IllegalArgumentException("dModel must be >= 1");
         if (seqLen < 1) throw new IllegalArgumentException("seqLen must be >= 1");
@@ -53,13 +67,22 @@ public class CausalSelfAttention {
         this.Wv = new Linear(dModel, dModel);
         this.Wo = new Linear(dModel, dModel);
 
+        /*
+         * Scale query/key projections slightly at initialisation.
+         *
+         * During development, Wq and Wk were found to receive near-zero gradients
+         * when the attention scores started too uniformly. Scaling helped stabilise
+         * early training and supported gradient flow through the attention softmax.
+         */
         scaleWeights(Wq.getWeights(), 0.1);
         scaleWeights(Wk.getWeights(), 0.1);
     }
 
     /**
-     * @param X (B*T, dModel)
-     * @return  (B*T, dModel)
+     * Forward pass through causal self-attention.
+     *
+     * @param X input matrix of shape (batchSize * seqLen) x dModel
+     * @return output matrix of shape (batchSize * seqLen) x dModel
      */
     public Matrix forward(Matrix X) {
         if (X.getCols() != dModel) {
@@ -98,10 +121,17 @@ public class CausalSelfAttention {
     }
 
     /**
-     * Backprop through attention.
+     * Backward pass through causal self-attention.
      *
-     * @param dOut (B*T, dModel)
-     * @return dX  (B*T, dModel)
+     * Manually propagates gradients through:
+     * - output projection
+     * - context/value weighted sum
+     * - masked softmax
+     * - scaled dot-product scores
+     * - query, key, and value projections
+     *
+     * @param dOut upstream gradient of shape (batchSize * seqLen) x dModel
+     * @return gradient with respect to input X
      */
     public Matrix backward(Matrix dOut) {
         if (lastX == null) throw new IllegalStateException("Must call forward() before backward().");
@@ -112,12 +142,16 @@ public class CausalSelfAttention {
         int BT = lastX.getRows();
         int B = BT / seqLen;
 
-        // 1) Through Wo
+
         Matrix dContext = Wo.backward(dOut); // (B*T, dModel)
 
-        // 2) context[tq] = Σ_k attn[tq,k] * V[k]
-        //    => dAttn[tq,k] = dContext[tq] · V[k]
-        //    => dV[k] += attn[tq,k] * dContext[tq]
+        /*
+         * context[tq] = sum(attn[tq, tk] * V[tk])
+         *
+         * Therefore:
+         *     dAttn[tq, tk] = dContext[tq] dot V[tk]
+         *     dV[tk] += attn[tq, tk] * dContext[tq]
+         */
         Matrix dAttn = new Matrix(BT, seqLen);
         Matrix dV = new Matrix(BT, dModel);
 
@@ -127,7 +161,6 @@ public class CausalSelfAttention {
             for (int tq = 0; tq < seqLen; tq++) {
                 int qRow = base + tq;
 
-                // dAttn row
                 for (int tk = 0; tk < seqLen; tk++) {
                     int vRow = base + tk;
 
@@ -138,7 +171,6 @@ public class CausalSelfAttention {
                     dAttn.set(qRow, tk, dAttn.get(qRow, tk) + dot);
                 }
 
-                // dV accumulation
                 for (int tk = 0; tk < seqLen; tk++) {
                     double a = attn.get(qRow, tk);
                     int vRow = base + tk;
@@ -151,10 +183,16 @@ public class CausalSelfAttention {
             }
         }
 
-        // 3) attn = softmax(scores) with causal mask
+        // Backprop through the masked softmax operation.
         Matrix dScores = maskedSoftmaxBackward(attn, dAttn); // (B*T, T)
 
-        // 4) scores[tq,tk] = (Q[tq]·K[tk]) / sqrt(dModel)
+        /*
+         * scores[tq, tk] = Q[tq] dot K[tk] / sqrt(dModel)
+         *
+         * Therefore:
+         *     dQ[tq] += dScore[tq, tk] * K[tk] / sqrt(dModel)
+         *     dK[tk] += dScore[tq, tk] * Q[tq] / sqrt(dModel)
+         */
         double scale = 1.0 / Math.sqrt(dModel);
 
         Matrix dQ = new Matrix(BT, dModel);
@@ -194,12 +232,12 @@ public class CausalSelfAttention {
             backwardDebugPrinted = true;
         }
 
-        // 5) Backprop through projection linears
+        // Backprop through projection linears
         Matrix dXq = Wq.backward(dQ);
         Matrix dXk = Wk.backward(dK);
         Matrix dXv = Wv.backward(dV);
 
-        // 6) Sum gradients to input X
+        // Sum gradients to input X
         Matrix dX = new Matrix(BT, dModel);
         for (int r = 0; r < BT; r++) {
             for (int c = 0; c < dModel; c++) {
@@ -210,7 +248,13 @@ public class CausalSelfAttention {
         return dX;
     }
 
-    // scores[qRow, tk] = dot(Q[qRow], K[kRow]) / sqrt(dModel)
+    /**
+     * Computes scaled dot-product attention scores for each batch sequence.
+     *
+     * @param Q query matrix of shape (batchSize * seqLen) x dModel
+     * @param K key matrix of shape (batchSize * seqLen) x dModel
+     * @return score matrix of shape (batchSize * seqLen) x seqLen
+     */
     private Matrix computeScores(Matrix Q, Matrix K) {
         int BT = Q.getRows();
         int B = BT / seqLen;
@@ -239,7 +283,15 @@ public class CausalSelfAttention {
         return s;
     }
 
-    // attn row-wise softmax with causal mask (tk > tq masked)
+    /**
+     * Applies row-wise softmax with a causal mask.
+     *
+     * For token position tq, only keys tk <= tq are visible.
+     * Future positions are assigned probability 0.
+     *
+     * @param scores attention score matrix of shape (batchSize * seqLen) x seqLen
+     * @return masked attention probability matrix of the same shape
+     */
     private Matrix maskedSoftmax(Matrix scores) {
         int BT = scores.getRows();
         Matrix probs = new Matrix(BT, seqLen);
@@ -258,7 +310,7 @@ public class CausalSelfAttention {
             for (int tk = 0; tk < seqLen; tk++) {
                 double e;
                 if (tk > tq) {
-                    e = 0.0; // masked
+                    e = 0.0;
                 } else {
                     e = Math.exp(scores.get(row, tk) - max);
                 }
@@ -266,7 +318,6 @@ public class CausalSelfAttention {
                 sumExp += e;
             }
 
-            // normalise 
             for (int tk = 0; tk < seqLen; tk++) {
                 probs.set(row, tk, probs.get(row, tk) / sumExp);
             }
@@ -275,7 +326,16 @@ public class CausalSelfAttention {
         return probs;
     }
 
-    // context[tq] = Σ_k attn[tq,k] * V[k]
+    /**
+     * Computes context vectors as weighted sums of value vectors.
+     *
+     * For each query position tq:
+     *     context[tq] = sum over tk of attn[tq, tk] * V[tk]
+     *
+     * @param attn attention probability matrix of shape (batchSize * seqLen) x seqLen
+     * @param V value matrix of shape (batchSize * seqLen) x dModel
+     * @return context matrix of shape (batchSize * seqLen) x dModel
+     */
     private Matrix computeContext(Matrix attn, Matrix V) {
         int BT = V.getRows();
         int B = BT / seqLen;
@@ -304,11 +364,16 @@ public class CausalSelfAttention {
     }
 
     /**
-     * Backward for row-wise softmax with causal mask.
+     * Computes the backward pass for row-wise softmax with causal masking.
      *
-     * For each row:
-     *   dScores_j = a_j * (dAttn_j - Σ_k dAttn_k * a_k)
-     * and for masked positions (tk > tq), dScores = 0.
+     * For each unmasked position:
+     *     dScores_j = attn_j * (dAttn_j - sum_k(dAttn_k * attn_k))
+     *
+     * Masked future positions receive zero gradient.
+     *
+     * @param attn attention probabilities from the forward pass
+     * @param dAttn upstream gradient with respect to attention probabilities
+     * @return gradient with respect to the pre-softmax attention scores
      */
     private Matrix maskedSoftmaxBackward(Matrix attn, Matrix dAttn) {
         int BT = attn.getRows();
@@ -336,13 +401,40 @@ public class CausalSelfAttention {
         return dScores;
     }
 
-    // Expose Linear layers so SGD.step(Linear) can update them.
+    /**
+     * Returns the query projection layer.
+     *
+     * @return query Linear layer
+     */
     public Linear getWq() { return Wq; }
+
+    /**
+     * Returns the key projection layer.
+     *
+     * @return key Linear layer
+     */
     public Linear getWk() { return Wk; }
+
+    /**
+     * Returns the value projection layer.
+     *
+     * @return value Linear layer
+     */
     public Linear getWv() { return Wv; }
+
+    /**
+     * Returns the output projection layer.
+     *
+     * @return output Linear layer
+     */
     public Linear getWo() { return Wo; }
 
-
+    /**
+     * Finds the minimum value in a matrix.
+     *
+     * @param m matrix to inspect
+     * @return minimum value
+     */
     private static double min(Matrix m) {
         double min = m.get(0, 0);
 
@@ -355,6 +447,12 @@ public class CausalSelfAttention {
         return min;
     }
 
+    /**
+     * Finds the maximum value in a matrix.
+     *
+     * @param m matrix to inspect
+     * @return maximum value
+     */
     private static double max(Matrix m) {
         double max = m.get(0, 0);
 
@@ -367,6 +465,13 @@ public class CausalSelfAttention {
         return max;
     }
 
+    /**
+     * Computes the sum of a single matrix row.
+     *
+     * @param m matrix to inspect
+     * @param row row index
+     * @return sum of values in the row
+     */
     private static double rowSum(Matrix m, int row) {
         double sum = 0.0;
         for (int j = 0; j < m.getCols(); j++) {
@@ -375,6 +480,12 @@ public class CausalSelfAttention {
         return sum;
     }
 
+    /**
+     * Prints one row of a matrix for debugging.
+     *
+     * @param m matrix to inspect
+     * @param row row index to print
+     */
     private static void printRow(Matrix m, int row) {
         StringBuilder sb = new StringBuilder();
         sb.append("[");
@@ -388,6 +499,12 @@ public class CausalSelfAttention {
         System.out.println(sb.toString());
     }
 
+    /**
+     * Computes the L2 norm of all values in a matrix.
+     *
+     * @param m matrix to inspect
+     * @return Euclidean norm of the matrix values
+     */
     private static double l2(Matrix m) {
         double sum = 0.0;
         for (int i = 0; i < m.getRows(); i++) {
@@ -399,9 +516,20 @@ public class CausalSelfAttention {
         return Math.sqrt(sum);
     }
 
+    /**
+     * Scales every value in a weight matrix in-place.
+     *
+     * Used to reduce the initial magnitude of query/key projection weights,
+     * which helped stabilise early attention training.
+     *
+     * @param w matrix to scale
+     * @param scale scalar multiplier
+     */
     private static void scaleWeights(Matrix w, double scale) {
-    for (int i = 0; i < w.getRows(); i++)
-        for (int j = 0; j < w.getCols(); j++)
-            w.set(i, j, w.get(i, j) * scale);
+        for (int i = 0; i < w.getRows(); i++) {
+            for (int j = 0; j < w.getCols(); j++) {
+                w.set(i, j, w.get(i, j) * scale);
+            }
+        }
     }
 }
