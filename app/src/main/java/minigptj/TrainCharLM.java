@@ -120,7 +120,7 @@ public class TrainCharLM {
 
             updatePositionalEmbeddings(pos, gradPos, learningRate);
 
-            if (step % 100 == 0) {
+            if (step % 200 == 0) {
                 System.out.printf("step %d | loss %.4f%n", step, loss);
 
                 String sample = generate(
